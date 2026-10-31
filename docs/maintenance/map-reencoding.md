@@ -5,6 +5,10 @@ generating a random map. That file embeds the map's rendered SVG preview (line 5
 `.map` format), which contains ~50 base64-encoded texture images (~20 MB). Re-encoding
 those images to WebP shrinks the file by ~45% (31 MB → 17 MB), roughly halving first-load time.
 
+Saving a map in the app now re-encodes the embedded images automatically
+(`src/services/io/save.ts`), so any map saved from the app is already optimized. The script
+below is only needed to optimize an existing `.map` file (e.g. a map saved before this feature).
+
 ## Why it helps
 
 - The embedded images are mostly ~981×992 PNG tiles with alpha (relief shading). They are
@@ -12,7 +16,7 @@ those images to WebP shrinks the file by ~45% (31 MB → 17 MB), roughly halving
 - Lossy WebP (`quality: 90`, `alphaQuality: 100`) re-encodes them ~85% smaller with no
   visible difference for smooth terrain shading.
 
-## How to re-encode
+## Re-encoding an existing file
 
 `scripts/reencode-map.mjs` rewrites the images in place:
 

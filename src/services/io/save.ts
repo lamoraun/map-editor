@@ -14,7 +14,7 @@ async function saveMap(method: SaveMethod): Promise<void> {
   closeDialogs("#alert");
 
   try {
-    const mapData = prepareMapData();
+    const mapData = await prepareMapData();
     const filename = `${getFileName()}.map`;
 
     if (method === "storage") await saveToStorage(mapData, true);
@@ -45,7 +45,45 @@ async function saveMap(method: SaveMethod): Promise<void> {
   }
 }
 
-function prepareMapData(): string {
+// Re-encode PNG/JPEG data URIs embedded in the SVG to WebP to shrink the saved map.
+// Only replaces an image when the WebP result is smaller; SVG and WebP images are skipped.
+async function reencodeSvgImages(svgEl: SVGSVGElement): Promise<void> {
+  const images = Array.from(svgEl.querySelectorAll("image"));
+  for (const img of images) {
+    const href = img.getAttribute("href") || img.getAttribute("xlink:href") || "";
+    const match = href.match(/data:image\/(png|jpeg|jpg);base64,([A-Za-z0-9+/=]+)/);
+    if (!match) continue;
+
+    const webp = await encodeToWebp(match[2], match[1]);
+    if (webp && webp.length < match[2].length) img.setAttribute("href", `data:image/webp;base64,${webp}`);
+  }
+}
+
+function encodeToWebp(base64: string, format: string): Promise<string | null> {
+  return new Promise(resolve => {
+    const image = new Image();
+    image.onload = () => {
+      const { naturalWidth: width, naturalHeight: height } = image;
+      if (!width || !height) return resolve(null);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return resolve(null);
+      ctx.drawImage(image, 0, 0);
+      canvas.toBlob(blob => {
+        if (!blob || blob.type !== "image/webp") return resolve(null);
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(String(reader.result).split(",")[1] ?? null);
+        reader.readAsDataURL(blob);
+      }, "image/webp", 0.9);
+    };
+    image.onerror = () => resolve(null);
+    image.src = `data:image/${format};base64,${base64}`;
+  });
+}
+
+async function prepareMapData(): Promise<string> {
   const date = new Date();
   const dateString = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
   const license = "File can be loaded in azgaar.github.io/Fantasy-Map-Generator";
@@ -101,6 +139,8 @@ function prepareMapData(): string {
   if (cloneRuler) cloneRuler.innerHTML = ""; // always remove rulers
   const cloneTradeAnimation = cloneEl.querySelector("#tradeAnimation");
   if (cloneTradeAnimation) cloneTradeAnimation.innerHTML = ""; // always remove transient trade animations
+
+  await reencodeSvgImages(cloneEl); // shrink embedded texture images to WebP
 
   const serializedSVG = new XMLSerializer().serializeToString(cloneEl);
 
