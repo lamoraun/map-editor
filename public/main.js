@@ -268,10 +268,10 @@ async function readBlobWithProgress(response) {
     if (loadingText) {
       if (total) {
         const pct = Math.round((received / total) * 100);
-        loadingText.innerHTML = `Loading map&hellip; <b>${pct}%</b>`;
+        loadingText.innerHTML = `Загрузка карты&hellip; <b>${pct}%</b>`;
       } else {
         const mb = (received / 1048576).toFixed(1);
-        loadingText.innerHTML = `Loading map&hellip; <b>${mb} MB</b>`;
+        loadingText.innerHTML = `Загрузка карты&hellip; <b>${mb} МБ</b>`;
       }
     }
   }
@@ -287,7 +287,7 @@ async function checkLoadParameters() {
   // hardcoded: always load the bundled project map on startup
   try {
     const loadingText = document.getElementById("loading-text");
-    if (loadingText) loadingText.innerHTML = "Loading map&hellip;";
+    if (loadingText) loadingText.innerHTML = "Загрузка карты&hellip;";
 
     // try browser storage cache first for an instant load on repeat visits
     const cached = await ldb.get("actualMap");
@@ -301,7 +301,7 @@ async function checkLoadParameters() {
     if (!response.ok) throw new Error(`Cannot load actual.map: ${response.status}`);
 
     const blob = await readBlobWithProgress(response);
-    if (loadingText) loadingText.innerHTML = "Rendering map&hellip;";
+    if (loadingText) loadingText.innerHTML = "Отрисовка карты&hellip;";
 
     // cache the bundled map for instant loads on future visits
     try {
