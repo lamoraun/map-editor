@@ -71,12 +71,16 @@ function encodeToWebp(base64: string, format: string): Promise<string | null> {
       const ctx = canvas.getContext("2d");
       if (!ctx) return resolve(null);
       ctx.drawImage(image, 0, 0);
-      canvas.toBlob(blob => {
-        if (!blob || blob.type !== "image/webp") return resolve(null);
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(String(reader.result).split(",")[1] ?? null);
-        reader.readAsDataURL(blob);
-      }, "image/webp", 0.9);
+      canvas.toBlob(
+        blob => {
+          if (!blob || blob.type !== "image/webp") return resolve(null);
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(String(reader.result).split(",")[1] ?? null);
+          reader.readAsDataURL(blob);
+        },
+        "image/webp",
+        0.9
+      );
     };
     image.onerror = () => resolve(null);
     image.src = `data:image/${format};base64,${base64}`;
