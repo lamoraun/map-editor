@@ -69,6 +69,7 @@
 
 - **Legacy Globals**: The codebase heavily relies on implicit global state (`pack` and `grid` on the `window`). Be extremely cautious when refactoring these to explicit parameters.
 - **`index.html`**: A massive monolith serving as the primary UI template. It can easily break if structural tags are accidentally nested incorrectly.
+- **Bundled map**: This fork always loads `public/actual.map` on startup (hardcoded in `public/main.js`). It embeds ~20 MB of base64 texture images; keep it small by re-encoding after replacing it — see `docs/maintenance/map-reencoding.md`.
 
 # Important Files
 
