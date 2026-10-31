@@ -1,0 +1,2 @@
+# FMG map save files rely on CRLF line endings between data lines; store byte-for-byte
+*.map binary

@@ -258,6 +258,17 @@ async function checkLoadParameters() {
   const url = new URL(window.location.href);
   const params = url.searchParams;
 
+  // hardcoded: always load the bundled project map on startup
+  try {
+    const response = await fetch("./actual.map");
+    if (!response.ok) throw new Error(`Cannot load actual.map: ${response.status}`);
+    const blob = await response.blob();
+    window.Services.Load.uploadMap(blob);
+    return;
+  } catch (error) {
+    ERROR && console.error("Failed to load bundled map", error);
+  }
+
   // of there is a valid maplink, try to load .map/.gz file from URL
   if (params.get("maplink")) {
     WARN && console.warn("Load map from URL");
