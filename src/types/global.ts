@@ -183,6 +183,8 @@ declare global {
   var shiftCompass: () => void;
 
   var layerIsOn: (layerId: string) => boolean;
+  var hideLoading: () => void;
+  var showLoading: () => void;
   var drawRoute: (route: any) => void;
   var invokeActiveZooming: () => void;
   var FlatQueue: any;

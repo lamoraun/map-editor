@@ -234,7 +234,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
   } else {
-    hideLoading();
     await checkLoadParameters();
   }
   initiateAutosave();
@@ -253,6 +252,33 @@ function showLoading() {
   d3.select("#tooltip").transition().duration(200).style("opacity", 0);
 }
 
+// read a fetch response body while updating the loading screen with progress
+async function readBlobWithProgress(response) {
+  const total = +response.headers.get("Content-Length") || 0;
+  const reader = response.body.getReader();
+  const chunks = [];
+  let received = 0;
+  const loadingText = document.getElementById("loading-text");
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    if (loadingText) {
+      if (total) {
+        const pct = Math.round((received / total) * 100);
+        loadingText.innerHTML = `Loading map&hellip; <b>${pct}%</b>`;
+      } else {
+        const mb = (received / 1048576).toFixed(1);
+        loadingText.innerHTML = `Loading map&hellip; <b>${mb} MB</b>`;
+      }
+    }
+  }
+
+  return new Blob(chunks);
+}
+
 // decide which map should be loaded or generated on page load
 async function checkLoadParameters() {
   const url = new URL(window.location.href);
@@ -260,12 +286,34 @@ async function checkLoadParameters() {
 
   // hardcoded: always load the bundled project map on startup
   try {
+    const loadingText = document.getElementById("loading-text");
+    if (loadingText) loadingText.innerHTML = "Loading map&hellip;";
+
+    // try browser storage cache first for an instant load on repeat visits
+    const cached = await ldb.get("actualMap");
+    if (cached) {
+      window.Services.Load.uploadMap(cached);
+      return;
+    }
+
+    showLoading();
     const response = await fetch("./actual.map");
     if (!response.ok) throw new Error(`Cannot load actual.map: ${response.status}`);
-    const blob = await response.blob();
+
+    const blob = await readBlobWithProgress(response);
+    if (loadingText) loadingText.innerHTML = "Rendering map&hellip;";
+
+    // cache the bundled map for instant loads on future visits
+    try {
+      await ldb.set("actualMap", blob);
+    } catch (cacheError) {
+      WARN && console.warn("Cannot cache bundled map in browser storage", cacheError);
+    }
+
     window.Services.Load.uploadMap(blob);
     return;
   } catch (error) {
+    hideLoading();
     ERROR && console.error("Failed to load bundled map", error);
   }
 

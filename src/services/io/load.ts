@@ -226,6 +226,7 @@ function showUploadMessage(type: string, mapData: string[] | null, mapVersion: s
     return;
   }
 
+  hideLoading();
   alertMessage.innerHTML = message;
   $("#alert").dialog({
     title,
@@ -856,6 +857,7 @@ async function parseLoadedData(data: string[], mapVersion: string | null): Promi
     });
   } finally {
     if (loadGroupOpen) console.groupEnd();
+    hideLoading();
   }
 }
 
