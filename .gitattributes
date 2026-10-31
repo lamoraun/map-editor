@@ -1,2 +1,5 @@
+# Normalize all text files to LF line endings (deterministic across platforms)
+* text=auto eol=lf
+
 # FMG map save files rely on CRLF line endings between data lines; store byte-for-byte
 *.map binary
