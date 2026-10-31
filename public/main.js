@@ -255,6 +255,9 @@ function showLoading() {
 // read a fetch response body while updating the loading screen with progress
 async function readBlobWithProgress(response) {
   const total = +response.headers.get("Content-Length") || 0;
+  // Content-Length is unreliable when the server compresses the body (gzip/br):
+  // it reports the compressed size while response.body yields decompressed bytes.
+  const compressed = !!response.headers.get("Content-Encoding");
   const reader = response.body.getReader();
   const chunks = [];
   let received = 0;
@@ -266,7 +269,7 @@ async function readBlobWithProgress(response) {
     chunks.push(value);
     received += value.length;
     if (loadingText) {
-      if (total) {
+      if (total && !compressed && received <= total) {
         const pct = Math.round((received / total) * 100);
         loadingText.innerHTML = `Загрузка карты&hellip; <b>${pct}%</b>`;
       } else {
