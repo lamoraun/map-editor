@@ -879,9 +879,16 @@ async function parseLoadedData(data: string[], mapVersion: string | null): Promi
         svg.call(zoom.transform, transform);
       }
     } else {
-      // Touch screens. Don't sync the canvas inputs (fitMapToScreen then keeps the cheap
-      // b9825e4a viewport), but still shrink the stale ocean/land background rects to the loaded
-      // graph, otherwise the ocean/land colour bleeds past the map and misaligns with it.
+      // Touch screens. Hide the texture overlay and the tiled ocean pattern - the two priciest
+      // full-map paint layers - to keep pan smooth. Done in JS (not a CSS media query) so it
+      // follows the exact same pointer-device test as the fit above; media queries can report
+      // `hover: on-demand` on some hybrids and miss the `hover: none` match.
+      texture.style("display", "none");
+      oceanPattern.style("display", "none");
+
+      // Don't sync the canvas inputs (fitMapToScreen then keeps the cheap b9825e4a viewport), but
+      // still shrink the stale ocean/land background rects to the loaded graph, otherwise the
+      // ocean/land colour bleeds past the map and misaligns with it.
       landmass.select("rect").attr("x", 0).attr("y", 0).attr("width", graphWidth).attr("height", graphHeight);
       oceanPattern.select("rect").attr("x", 0).attr("y", 0).attr("width", graphWidth).attr("height", graphHeight);
       oceanLayers.select("rect").attr("x", 0).attr("y", 0).attr("width", graphWidth).attr("height", graphHeight);
