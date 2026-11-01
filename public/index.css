@@ -89,6 +89,16 @@ iframe {
   }
 }
 
+/* On touch devices the promoted layer above is disabled, so every pan frame re-rasters the full
+   SVG. The texture overlay and the tiled ocean pattern are the priciest parts of that re-raster;
+   drop them on mobile to keep pan smooth. */
+@media (hover: none), (pointer: coarse) {
+  #texture,
+  #oceanPattern {
+    display: none;
+  }
+}
+
 /* During a zoom gesture the whole layer is re-rasterized every frame; the paper/crumple/
    drop-shadow filters multiply that cost (offscreen buffers per frame, worse on HiDPI).
    Drop them mid-zoom for a snappier gesture, restore on zoom end. */

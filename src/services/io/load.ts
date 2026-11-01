@@ -825,20 +825,19 @@ async function parseLoadedData(data: string[], mapVersion: string | null): Promi
     focusOn(); // based on searchParams focus on point, cell or burg
     invokeActiveZooming();
 
-    // The saved SVG can carry an ocean/land background larger than the graph (a stale canvas
-    // from a previous session), and the canvas-size inputs are not part of the saved map. Sync
-    // the canvas to the loaded graph and resize the background rects so there is no leftover
-    // ocean margin around the continent.
-    ensureEl<HTMLInputElement>("mapWidthInput").value = String(graphWidth);
-    ensureEl<HTMLInputElement>("mapHeightInput").value = String(graphHeight);
-    applyGraphSize(); // resize the ocean/land background rects to the loaded size
-
     // Fit the map on load. On precise-pointer devices fill the window (cover) and center the
-    // map. On touch screens fall back to the classic fitMapToScreen (the b9825e4a behaviour):
-    // cap the viewport at the map size so the map shows at a native-ish scale, one-finger pan
-    // stays cheap and both axes remain pannable once the user pinches in.
+    // map. On touch screens keep the classic fitMapToScreen (the b9825e4a behaviour): cap the
+    // viewport at the map size so the map shows at a cheap native-ish scale.
     const fillScreen = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
     if (fillScreen) {
+      // The saved SVG can carry an ocean/land background larger than the graph (a stale canvas
+      // from a previous session), and the canvas-size inputs are not part of the saved map. Sync
+      // the canvas to the loaded graph and resize the background rects so there is no leftover
+      // ocean margin around the continent.
+      ensureEl<HTMLInputElement>("mapWidthInput").value = String(graphWidth);
+      ensureEl<HTMLInputElement>("mapHeightInput").value = String(graphHeight);
+      applyGraphSize(); // resize the ocean/land background rects to the loaded size
+
       // Fit the map to the *window*, not to the canvas: the canvas now equals the graph size, so
       // the standard fitMapToScreen would cap the viewport at the map size and show it 1:1 with
       // empty space around it on larger displays. Size the viewport to the window and fit the
@@ -880,7 +879,21 @@ async function parseLoadedData(data: string[], mapVersion: string | null): Promi
         svg.call(zoom.transform, transform);
       }
     } else {
+      // Touch screens. Don't sync the canvas inputs (fitMapToScreen then keeps the cheap
+      // b9825e4a viewport), but still shrink the stale ocean/land background rects to the loaded
+      // graph, otherwise the ocean/land colour bleeds past the map and misaligns with it.
+      landmass.select("rect").attr("x", 0).attr("y", 0).attr("width", graphWidth).attr("height", graphHeight);
+      oceanPattern.select("rect").attr("x", 0).attr("y", 0).attr("width", graphWidth).attr("height", graphHeight);
+      oceanLayers.select("rect").attr("x", 0).attr("y", 0).attr("width", graphWidth).attr("height", graphHeight);
       fitMapToScreen();
+
+      // fitMapToScreen sizes the viewport so the map fills one axis exactly, which the strict
+      // translate extent then locks (no pan along that axis). Loosen it on mobile so the map can
+      // be panned in both directions even at the minimum zoom.
+      zoom.translateExtent([
+        [-graphWidth / 2, -graphHeight / 2],
+        [graphWidth * 1.5, graphHeight * 1.5]
+      ]);
     }
 
     WARN && console.warn(`TOTAL: ${rn((performance.now() - uploadTimeStart) / 1000, 2)}s`);
