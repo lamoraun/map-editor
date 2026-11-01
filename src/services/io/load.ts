@@ -5,6 +5,7 @@ import { applyDefaultViewboxEvents } from "@/components/viewbox-events";
 import { clearLegend } from "@/renderers/draw-legend";
 import { drawMeasurers } from "@/renderers/draw-measurers";
 import { drawRelief } from "@/renderers/draw-relief-icons";
+import { fitScaleBar } from "@/renderers/draw-scalebar";
 import { drawLabels } from "@/renderers/labels/labels-renderer";
 import { Services } from "@/services";
 import { declareFont } from "@/services/fonts";
@@ -823,7 +824,55 @@ async function parseLoadedData(data: string[], mapVersion: string | null): Promi
     if (typeof window.applyDefaultViewboxEvents === "function") applyDefaultViewboxEvents();
     focusOn(); // based on searchParams focus on point, cell or burg
     invokeActiveZooming();
-    fitMapToScreen();
+
+    // The saved SVG can carry an ocean/land background larger than the graph (a stale canvas
+    // from a previous session), and the canvas-size inputs are not part of the saved map. Sync
+    // the canvas to the loaded graph and resize the background rects so there is no leftover
+    // ocean margin around the continent.
+    ensureEl<HTMLInputElement>("mapWidthInput").value = String(graphWidth);
+    ensureEl<HTMLInputElement>("mapHeightInput").value = String(graphHeight);
+    applyGraphSize(); // resize the ocean/land background rects to the loaded size
+
+    // Fit the map to the *window*, not to the canvas: the canvas now equals the graph size, so
+    // the standard fitMapToScreen would cap the viewport at the map size and show it 1:1 with
+    // empty space around it on larger displays. Size the viewport to the window and fit the
+    // graph to it instead.
+    svgWidth = window.innerWidth;
+    svgHeight = window.innerHeight;
+    svg.attr("width", svgWidth).attr("height", svgHeight);
+    const zoomMin = rn(Math.max(svgWidth / graphWidth, svgHeight / graphHeight), 3);
+    ensureEl<HTMLInputElement>("zoomExtentMin").value = String(zoomMin);
+    const zoomMax = +ensureEl<HTMLInputElement>("zoomExtentMax").value;
+    zoom
+      .translateExtent([
+        [0, 0],
+        [graphWidth, graphHeight]
+      ])
+      .scaleExtent([zoomMin, zoomMax]);
+    fitScaleBar(scaleBar, svgWidth, svgHeight);
+    window.fitLegendBox();
+
+    // Center the map at the fit (cover) zoom instead of leaving it at 1:1 anchored to the
+    // top-left corner (which shows only the left edge on narrow screens). Skip when a deep
+    // link requested a specific focus point - focusOn() above already zooms there.
+    const focusParams = new URL(window.location.href).searchParams;
+    if (!focusParams.get("scale") && !focusParams.get("cell") && !focusParams.get("burg")) {
+      const transform = (window.d3 as any).zoomIdentity
+        .translate((graphWidth / 2) * -zoomMin + svgWidth / 2, (graphHeight / 2) * -zoomMin + svgHeight / 2)
+        .scale(zoomMin);
+
+      // Write the viewport transform directly. The zoom event pipeline defers the viewbox
+      // write to a requestAnimationFrame that handleZoomEnd cancels for a programmatic zoom, so
+      // a duration-0 zoomTo() would update the globals but never move the viewbox.
+      scale = transform.k;
+      viewX = transform.x;
+      viewY = transform.y;
+      viewbox.attr("transform", `translate(${viewX} ${viewY}) scale(${scale})`);
+
+      // Sync the zoom behaviour's internal state (so the next user gesture continues from here)
+      // and run the settle-time updates (emblem/halo/marker rescaling, label size).
+      svg.call(zoom.transform, transform);
+    }
 
     WARN && console.warn(`TOTAL: ${rn((performance.now() - uploadTimeStart) / 1000, 2)}s`);
     showStatistics();
