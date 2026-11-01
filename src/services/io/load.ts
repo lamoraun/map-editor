@@ -840,7 +840,18 @@ async function parseLoadedData(data: string[], mapVersion: string | null): Promi
     svgWidth = window.innerWidth;
     svgHeight = window.innerHeight;
     svg.attr("width", svgWidth).attr("height", svgHeight);
-    const zoomMin = rn(Math.max(svgWidth / graphWidth, svgHeight / graphHeight), 3);
+
+    // On precise-pointer devices fill the window (cover). On touch screens a cover fit fills one
+    // axis exactly, which the translate/scale extents below then lock (no pan along that axis, no
+    // pinch-zoom out past the fill scale). Fit the whole map (contain) there so the map is fully
+    // visible and the user can pinch to explore, like opening a map on a phone.
+    const fillScreen = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+    const zoomMin = rn(
+      fillScreen
+        ? Math.max(svgWidth / graphWidth, svgHeight / graphHeight)
+        : Math.min(svgWidth / graphWidth, svgHeight / graphHeight),
+      3
+    );
     ensureEl<HTMLInputElement>("zoomExtentMin").value = String(zoomMin);
     const zoomMax = +ensureEl<HTMLInputElement>("zoomExtentMax").value;
     zoom
@@ -852,9 +863,9 @@ async function parseLoadedData(data: string[], mapVersion: string | null): Promi
     fitScaleBar(scaleBar, svgWidth, svgHeight);
     window.fitLegendBox();
 
-    // Center the map at the fit (cover) zoom instead of leaving it at 1:1 anchored to the
-    // top-left corner (which shows only the left edge on narrow screens). Skip when a deep
-    // link requested a specific focus point - focusOn() above already zooms there.
+    // Center the map at the fit zoom instead of leaving it at 1:1 anchored to the top-left
+    // corner (which shows only the left edge on narrow screens). Skip when a deep link requested
+    // a specific focus point - focusOn() above already zooms there.
     const focusParams = new URL(window.location.href).searchParams;
     if (!focusParams.get("scale") && !focusParams.get("cell") && !focusParams.get("burg")) {
       const transform = (window.d3 as any).zoomIdentity
