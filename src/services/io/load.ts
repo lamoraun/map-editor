@@ -833,56 +833,54 @@ async function parseLoadedData(data: string[], mapVersion: string | null): Promi
     ensureEl<HTMLInputElement>("mapHeightInput").value = String(graphHeight);
     applyGraphSize(); // resize the ocean/land background rects to the loaded size
 
-    // Fit the map to the *window*, not to the canvas: the canvas now equals the graph size, so
-    // the standard fitMapToScreen would cap the viewport at the map size and show it 1:1 with
-    // empty space around it on larger displays. Size the viewport to the window and fit the
-    // graph to it instead.
-    svgWidth = window.innerWidth;
-    svgHeight = window.innerHeight;
-    svg.attr("width", svgWidth).attr("height", svgHeight);
-
-    // On precise-pointer devices fill the window (cover). On touch screens a cover fit fills one
-    // axis exactly, which the translate/scale extents below then lock (no pan along that axis, no
-    // pinch-zoom out past the fill scale). Fit the whole map (contain) there so the map is fully
-    // visible and the user can pinch to explore, like opening a map on a phone.
+    // Fit the map on load. On precise-pointer devices fill the window (cover) and center the
+    // map. On touch screens fall back to the classic fitMapToScreen (the b9825e4a behaviour):
+    // cap the viewport at the map size so the map shows at a native-ish scale, one-finger pan
+    // stays cheap and both axes remain pannable once the user pinches in.
     const fillScreen = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-    const zoomMin = rn(
-      fillScreen
-        ? Math.max(svgWidth / graphWidth, svgHeight / graphHeight)
-        : Math.min(svgWidth / graphWidth, svgHeight / graphHeight),
-      3
-    );
-    ensureEl<HTMLInputElement>("zoomExtentMin").value = String(zoomMin);
-    const zoomMax = +ensureEl<HTMLInputElement>("zoomExtentMax").value;
-    zoom
-      .translateExtent([
-        [0, 0],
-        [graphWidth, graphHeight]
-      ])
-      .scaleExtent([zoomMin, zoomMax]);
-    fitScaleBar(scaleBar, svgWidth, svgHeight);
-    window.fitLegendBox();
+    if (fillScreen) {
+      // Fit the map to the *window*, not to the canvas: the canvas now equals the graph size, so
+      // the standard fitMapToScreen would cap the viewport at the map size and show it 1:1 with
+      // empty space around it on larger displays. Size the viewport to the window and fit the
+      // graph to it instead.
+      svgWidth = window.innerWidth;
+      svgHeight = window.innerHeight;
+      svg.attr("width", svgWidth).attr("height", svgHeight);
+      const zoomMin = rn(Math.max(svgWidth / graphWidth, svgHeight / graphHeight), 3);
+      ensureEl<HTMLInputElement>("zoomExtentMin").value = String(zoomMin);
+      const zoomMax = +ensureEl<HTMLInputElement>("zoomExtentMax").value;
+      zoom
+        .translateExtent([
+          [0, 0],
+          [graphWidth, graphHeight]
+        ])
+        .scaleExtent([zoomMin, zoomMax]);
+      fitScaleBar(scaleBar, svgWidth, svgHeight);
+      window.fitLegendBox();
 
-    // Center the map at the fit zoom instead of leaving it at 1:1 anchored to the top-left
-    // corner (which shows only the left edge on narrow screens). Skip when a deep link requested
-    // a specific focus point - focusOn() above already zooms there.
-    const focusParams = new URL(window.location.href).searchParams;
-    if (!focusParams.get("scale") && !focusParams.get("cell") && !focusParams.get("burg")) {
-      const transform = (window.d3 as any).zoomIdentity
-        .translate((graphWidth / 2) * -zoomMin + svgWidth / 2, (graphHeight / 2) * -zoomMin + svgHeight / 2)
-        .scale(zoomMin);
+      // Center the map at the fit (cover) zoom instead of leaving it at 1:1 anchored to the
+      // top-left corner (which shows only the left edge on narrow screens). Skip when a deep
+      // link requested a specific focus point - focusOn() above already zooms there.
+      const focusParams = new URL(window.location.href).searchParams;
+      if (!focusParams.get("scale") && !focusParams.get("cell") && !focusParams.get("burg")) {
+        const transform = (window.d3 as any).zoomIdentity
+          .translate((graphWidth / 2) * -zoomMin + svgWidth / 2, (graphHeight / 2) * -zoomMin + svgHeight / 2)
+          .scale(zoomMin);
 
-      // Write the viewport transform directly. The zoom event pipeline defers the viewbox
-      // write to a requestAnimationFrame that handleZoomEnd cancels for a programmatic zoom, so
-      // a duration-0 zoomTo() would update the globals but never move the viewbox.
-      scale = transform.k;
-      viewX = transform.x;
-      viewY = transform.y;
-      viewbox.attr("transform", `translate(${viewX} ${viewY}) scale(${scale})`);
+        // Write the viewport transform directly. The zoom event pipeline defers the viewbox
+        // write to a requestAnimationFrame that handleZoomEnd cancels for a programmatic zoom, so
+        // a duration-0 zoomTo() would update the globals but never move the viewbox.
+        scale = transform.k;
+        viewX = transform.x;
+        viewY = transform.y;
+        viewbox.attr("transform", `translate(${viewX} ${viewY}) scale(${scale})`);
 
-      // Sync the zoom behaviour's internal state (so the next user gesture continues from here)
-      // and run the settle-time updates (emblem/halo/marker rescaling, label size).
-      svg.call(zoom.transform, transform);
+        // Sync the zoom behaviour's internal state (so the next user gesture continues from here)
+        // and run the settle-time updates (emblem/halo/marker rescaling, label size).
+        svg.call(zoom.transform, transform);
+      }
+    } else {
+      fitMapToScreen();
     }
 
     WARN && console.warn(`TOTAL: ${rn((performance.now() - uploadTimeStart) / 1000, 2)}s`);

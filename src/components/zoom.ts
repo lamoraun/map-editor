@@ -6,9 +6,6 @@ import { rn } from "@/utils/numberUtils";
 
 // Legacy behaviour from the global d3 v5. TODO: completely migrate to d3v7
 const DEFAULT_SCALE_EXTENT: [number, number] = [1, 20];
-// Touch screens cannot promote the whole viewbox to a GPU layer (see index.css: the promoted
-// layer overflows mobile texture limits), so every pan frame re-rasters the full SVG there.
-const isTouch = !window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | null = null;
 
 function zoom(): ZoomBehavior<SVGSVGElement, unknown> {
@@ -36,16 +33,12 @@ function onZoom(): void {
 
   // Demote the composited layer synchronously on the first scale change, a full frame
   // BEFORE the transform is applied in handleZoomPerFrame. Otherwise the browser re-rasters
-  // the still-promoted layer at the new scale and checkerboards to black.
+  // the still-promoted layer at the new scale and checkerboards to black. Also drop the
+  // expensive SVG filters for the duration of the gesture (see #viewbox.zooming in CSS).
   if (isScaleChanged) {
     viewbox.style("will-change", "auto");
+    viewbox.classed("zooming", true);
   }
-
-  // Drop the expensive SVG filters for the duration of the gesture (see #viewbox.zooming in
-  // CSS). On desktops the promoted layer makes pan free, so filters are dropped only while the
-  // scale changes (a full re-raster every frame). On touch screens pan also re-rasters every
-  // frame, so drop filters there too.
-  viewbox.classed("zooming", isScaleChanged || (isPositionChanged && isTouch));
 
   scale = k;
   viewX = x;
