@@ -80,8 +80,13 @@ iframe {
   user-select: none;
 }
 
-#viewbox {
-  will-change: transform;
+/* GPU-compositing makes pan buttery-smooth on desktops, but on touch devices the huge
+   promoted layer overflows mobile GPU texture limits and makes the map jump / appear to
+   self-zoom while one-finger panning. Keep it to precise-pointer devices only. */
+@media (hover: hover) and (pointer: fine) {
+  #viewbox {
+    will-change: transform;
+  }
 }
 
 /* During a zoom gesture the whole layer is re-rasterized every frame; the paper/crumple/
