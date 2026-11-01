@@ -20,6 +20,7 @@ export function applyZoomBehavior(): void {
 let frameId: number | null = null;
 let pendingScaleChange = false;
 let pendingPositionChange = false;
+let lastLabelsFontSize = 0;
 
 function onZoom(): void {
   const transform = (window.d3 as any).event.transform;
@@ -29,6 +30,15 @@ function onZoom(): void {
   const isScaleChanged = scale !== k;
   const isPositionChanged = viewX !== x || viewY !== y;
   if (!isScaleChanged && !isPositionChanged) return;
+
+  // Demote the composited layer synchronously on the first scale change, a full frame
+  // BEFORE the transform is applied in handleZoomPerFrame. Otherwise the browser re-rasters
+  // the still-promoted layer at the new scale and checkerboards to black. Also drop the
+  // expensive SVG filters for the duration of the gesture (see #viewbox.zooming in CSS).
+  if (isScaleChanged) {
+    viewbox.style("will-change", "auto");
+    viewbox.classed("zooming", true);
+  }
 
   scale = k;
   viewX = x;
@@ -64,14 +74,24 @@ function handleZoomPerFrame(): void {
     fitScaleBar(scaleBar, svgWidth, svgHeight);
 
     if (options.labels.resizeOnZoom) {
-      const fontSize = Math.max(Math.round(((100 + 100 / scale) / 2) * 100) / 100, 1);
-      labels.attr("font-size", `${fontSize}px`);
+      // Re-laying out every visible label on each zoom frame is one of the pricier
+      // parts of zooming. Skip the write until the size actually shifts by a visible
+      // step (the exact value is re-applied when the gesture settles).
+      const fontSize = getLabelsFontSize(scale);
+      if (!lastLabelsFontSize || Math.abs(fontSize - lastLabelsFontSize) / lastLabelsFontSize >= 0.02) {
+        lastLabelsFontSize = fontSize;
+        labels.attr("font-size", `${fontSize}px`);
+      }
     }
   }
 
   if (didPositionChange) {
     if (layerIsOn("toggleCoordinates")) drawCoordinates();
   }
+}
+
+function getLabelsFontSize(scale: number): number {
+  return Math.max(Math.round(((100 + 100 / scale) / 2) * 100) / 100, 1);
 }
 
 /** Rewrite map content once the gesture settles */
@@ -82,7 +102,20 @@ function handleZoomEnd(): void {
     ViewportLayers.renderNow();
   }
 
+  // Restore compositor promotion now that the scale is stable: the re-raster happens once
+  // here (settled view) instead of every pan frame. Falls back to the `#viewbox` CSS rule.
+  viewbox.style("will-change", null);
+  // Bring back the SVG filters dropped during the zoom gesture.
+  viewbox.classed("zooming", false);
+
   invokeActiveZooming();
+
+  // settle the label size to the exact value (it may have been throttled mid-zoom)
+  if (options.labels.resizeOnZoom) {
+    const fontSize = getLabelsFontSize(scale);
+    lastLabelsFontSize = fontSize;
+    labels.attr("font-size", `${fontSize}px`);
+  }
 }
 
 /** Mirror the map transform onto the heightmap tracing canvas */

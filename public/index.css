@@ -80,6 +80,17 @@ iframe {
   user-select: none;
 }
 
+#viewbox {
+  will-change: transform;
+}
+
+/* During a zoom gesture the whole layer is re-rasterized every frame; the paper/crumple/
+   drop-shadow filters multiply that cost (offscreen buffers per frame, worse on HiDPI).
+   Drop them mid-zoom for a snappier gesture, restore on zoom end. */
+#viewbox.zooming [filter] {
+  filter: none;
+}
+
 #canvas {
   position: absolute;
   pointer-events: none;

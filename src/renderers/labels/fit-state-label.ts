@@ -14,14 +14,55 @@ const LINE_HALF_HEIGHT = 0.55;
 const ONE_LINE_GAIN = 1.25;
 const SHORT_NAME_GAIN = 1.15;
 
-export function fitStateLabel(state: State, group: string): { pathPoints: Point[]; text: string; fontSize: number } {
+type FittedLabel = { pathPoints: Point[]; text: string; fontSize: number };
+
+// The raycast fit below is the single most expensive part of drawing labels:
+// re-running drawLabels() (after any edit) re-fits every state, which totals
+// ~1.6M quadtree lookups. Cache the result per state, scoped to the current
+// map's cell->state array, so unchanged states are reused instantly.
+const fitCache = new WeakMap<object, Map<number, { key: string; value: FittedLabel }>>();
+
+function fitCacheKey(
+  state: State,
+  mode: string,
+  groupStyle: { "font-size": string | number | null; "letter-spacing": string | number | null },
+  pole: Point
+): string {
+  const label = state.label;
+  return `${mode}|${groupStyle["font-size"]}|${groupStyle["letter-spacing"]}|${state.cells}|${pole[0]}|${pole[1]}|${state.name}|${state.fullName}|${label?.text}|${label?.fontSize}`;
+}
+
+export function fitStateLabel(state: State, group: string): FittedLabel {
   const mode = options.labels.groups.find(option => option.name === group)?.mode || "auto";
-  const fullName = state.fullName || state.name;
+  const groupStyle = getGroupStyle({ name: group, type: "state" });
   const pole = state.pole || pack.cells.p[state.center];
+
+  const regionIds = pack.cells.state;
+  let byState = fitCache.get(regionIds);
+  if (!byState) {
+    byState = new Map();
+    fitCache.set(regionIds, byState);
+  }
+
+  const key = fitCacheKey(state, mode, groupStyle, pole);
+  const cached = byState.get(state.i);
+  if (cached && cached.key === key) return cached.value;
+
+  const value = fitStateLabelUncached(state, mode, groupStyle, pole);
+  byState.set(state.i, { key, value });
+  return value;
+}
+
+function fitStateLabelUncached(
+  state: State,
+  mode: string,
+  groupStyle: { "font-size": string | number | null; "letter-spacing": string | number | null },
+  pole: Point
+): FittedLabel {
+  const fullName = state.fullName || state.name;
   const cellsNumber = state.cells;
   if (!cellsNumber) return { pathPoints: [], text: mode === "short" ? state.name : fullName, fontSize: 100 };
 
-  const groupStyle = getGroupStyle({ name: group, type: "state" });
   const baseFontSize = Number.parseFloat(String(groupStyle["font-size"])) || 22;
   const letterSpacing = Number(groupStyle["letter-spacing"]) || 0;
   const basePath = getRegionLabelPath(state.i, pack.cells.state, pole, cellsNumber, 0);

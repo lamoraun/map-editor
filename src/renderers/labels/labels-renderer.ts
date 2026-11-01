@@ -94,16 +94,22 @@ function reconcileGroup(labels: Element, textPaths: Element, groupName: string, 
   const visibleLabels = isVisible
     ? (labelsByGroup.get(groupName) || []).filter(label => isLabelVisible(context.bounds, label))
     : [];
-  const visibleIds = new Set(visibleLabels.map(label => label.id));
 
-  for (const child of Array.from(group.children)) {
+  const children = Array.from(group.children);
+  const visibleIds = new Set(visibleLabels.map(label => label.id));
+  const materializedIds = new Set(children.map(child => child.id));
+
+  // Remove labels that fell out of view (the text is a direct child of the group).
+  for (const child of children) {
     if (visibleIds.has(child.id)) continue;
-    removeMaterialized(child.id, context.root);
+    child.remove();
+    findElement(textPaths, `textPath_${child.id}`)?.remove();
   }
 
+  // Materialize labels that entered the view.
   for (const label of visibleLabels) {
-    const isMaterialized = group.querySelector<SVGTextElement>(`#${label.id}`);
-    if (!isMaterialized) materialize(label, group, textPaths);
+    if (materializedIds.has(label.id)) continue;
+    materialize(label, group, textPaths);
   }
 }
 

@@ -79,8 +79,6 @@ export class Scene<T extends { id: string }> {
 
 export class ViewportRenderer {
   private layers = new Map<string, ViewportLayer>();
-  private frameId: number | null = null;
-  private pending: ViewportRenderContext | null = null;
   private materializedBounds: ViewportBounds | null = null;
 
   constructor(
@@ -111,15 +109,12 @@ export class ViewportRenderer {
 
   schedule(): void {
     if (!this.shouldReconcile()) return;
-    const context = this.getLiveContext();
-    this.materializedBounds = context.bounds;
-    this.scheduleContext(context);
+    this.renderNow();
   }
 
   renderNow(): void {
     const context = this.getLiveContext();
     this.materializedBounds = context.bounds;
-    this.cancelScheduledRender();
     this.renderLayers(context);
   }
 
@@ -161,25 +156,8 @@ export class ViewportRenderer {
     );
   }
 
-  private scheduleContext(context: ViewportRenderContext): void {
-    this.pending = context;
-    if (this.frameId !== null) return;
-    this.frameId = requestAnimationFrame(() => {
-      this.frameId = null;
-      const pending = this.pending;
-      this.pending = null;
-      if (pending) this.renderLayers(pending);
-    });
-  }
-
   private getLiveContext(): ViewportRenderContext {
     return { root: document, bounds: this.getBounds(this.options.overscanPixels) };
-  }
-
-  private cancelScheduledRender(): void {
-    if (this.frameId !== null) cancelAnimationFrame(this.frameId);
-    this.frameId = null;
-    this.pending = null;
   }
 
   private renderLayers(context: ViewportRenderContext): void {
